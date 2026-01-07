@@ -69,6 +69,17 @@ class ModelStats(BaseModel):
     cost: Decimal = Field(default=Decimal("0.00"))
 
 
+class UserStats(BaseModel):
+    """Statistics for a single user within a time period."""
+
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    cache_create: int = Field(default=0, ge=0)
+    cache_read: int = Field(default=0, ge=0)
+    total_tokens: int = Field(default=0, ge=0)
+    cost: Decimal = Field(default=Decimal("0.00"))
+
+
 class AggregatedStats(BaseModel):
     """Aggregated statistics for a month or total.
 
@@ -77,7 +88,9 @@ class AggregatedStats(BaseModel):
     """
 
     month: str
+    user: str | None = None
     models: set[str] = Field(default_factory=set)
+    user_stats: dict[str, UserStats] = Field(default_factory=dict)
     model_stats: dict[str, ModelStats] = Field(default_factory=dict)
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
@@ -109,6 +122,18 @@ class AggregatedStats(BaseModel):
         model_stat.total_tokens += event.total_tokens
         model_stat.cost += event.cost
 
+        # Track per-user stats
+        user = event.user
+        if user not in self.user_stats:
+            self.user_stats[user] = UserStats()
+        user_stat = self.user_stats[user]
+        user_stat.input_tokens += event.input_no_cache
+        user_stat.output_tokens += event.output_tokens
+        user_stat.cache_create += event.cache_write
+        user_stat.cache_read += event.cache_read
+        user_stat.total_tokens += event.total_tokens
+        user_stat.cost += event.cost
+
         # Track aggregate totals
         self.input_tokens += event.input_no_cache
         self.output_tokens += event.output_tokens
@@ -128,6 +153,18 @@ class AggregatedStats(BaseModel):
             Self for method chaining.
         """
         self.models.update(other.models)
+
+        # Merge user stats
+        for user, stats in other.user_stats.items():
+            if user not in self.user_stats:
+                self.user_stats[user] = UserStats()
+            self.user_stats[user].input_tokens += stats.input_tokens
+            self.user_stats[user].output_tokens += stats.output_tokens
+            self.user_stats[user].cache_create += stats.cache_create
+            self.user_stats[user].cache_read += stats.cache_read
+            self.user_stats[user].total_tokens += stats.total_tokens
+            self.user_stats[user].cost += stats.cost
+
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens
         self.cache_create += other.cache_create

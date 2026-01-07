@@ -45,9 +45,24 @@ COLUMNS_WITH_BREAKDOWN: list[tuple[str, int, bool]] = [
     ("Cost (USD)", 13, True),
 ]
 
+# With -g flag (wider Month column for user breakdown rows, no Models column)
+COLUMNS_GROUP_BY_USER: list[tuple[str, int, bool]] = [
+    ("Month", 33, False),
+    ("Input", 12, True),
+    ("Output", 11, True),
+    ("Cache Create", 15, True),
+    ("Cache Read", 14, True),
+    ("Total Tokens", 15, True),
+    ("Cost (USD)", 13, True),
+]
 
-def _get_columns(show_models: bool) -> list[tuple[str, int, bool]]:
+
+def _get_columns(
+    show_models: bool, group_by_user: bool = False
+) -> list[tuple[str, int, bool]]:
     """Get column definitions based on display options."""
+    if group_by_user:
+        return COLUMNS_GROUP_BY_USER
     if show_models:
         return COLUMNS_WITH_BREAKDOWN
     return COLUMNS_NO_BREAKDOWN
@@ -58,6 +73,7 @@ def render_table(
     total: AggregatedStats,
     *,
     show_models: bool = False,
+    group_by_user: bool = False,
 ) -> str:
     """Render statistics as an ASCII table.
 
@@ -65,11 +81,12 @@ def render_table(
         monthly_stats: List of monthly aggregations.
         total: Grand total aggregation.
         show_models: Whether to include per-model breakdown rows.
+        group_by_user: Whether to include per-user breakdown rows.
 
     Returns:
         Complete table as a string.
     """
-    columns = _get_columns(show_models)
+    columns = _get_columns(show_models, group_by_user)
     lines: list[str] = []
 
     lines.append(_render_border("top", columns))
@@ -77,12 +94,16 @@ def render_table(
 
     for stats in monthly_stats:
         lines.append(_render_separator(columns))
-        lines.extend(_render_data_row(stats, columns))
-        if show_models:
-            lines.extend(_render_model_breakdown_rows(stats, columns))
+        if group_by_user:
+            lines.extend(_render_data_row_grouped(stats, columns))
+            lines.extend(_render_user_breakdown_rows(stats, columns))
+        else:
+            lines.extend(_render_data_row(stats, columns))
+            if show_models:
+                lines.extend(_render_model_breakdown_rows(stats, columns))
 
     lines.append(_render_separator(columns))
-    lines.append(_render_total_row(total, columns))
+    lines.append(_render_total_row(total, columns, group_by_user))
     lines.append(_render_border("bottom", columns))
 
     return "\n".join(lines)
@@ -185,21 +206,88 @@ def _render_model_breakdown_rows(
     return lines
 
 
+def _render_data_row_grouped(
+    stats: AggregatedStats,
+    columns: list[tuple[str, int, bool]],
+) -> list[str]:
+    """Render a data row for grouped-by-user output (no Models column).
+
+    Returns list of lines.
+    """
+    values: list[str] = [
+        stats.month,
+        format_number(stats.input_tokens),
+        format_number(stats.output_tokens),
+        format_number(stats.cache_create),
+        format_number(stats.cache_read),
+        format_number(stats.total_tokens),
+        format_currency(stats.cost),
+    ]
+
+    return [_format_row(values, columns)]
+
+
+def _render_user_breakdown_rows(
+    stats: AggregatedStats,
+    columns: list[tuple[str, int, bool]],
+) -> list[str]:
+    """Render per-user breakdown rows with separators.
+
+    Returns list of lines including separators before each user row.
+    """
+    lines: list[str] = []
+
+    # Sort users by cost (highest first) for breakdown display
+    sorted_users = sorted(
+        stats.user_stats.keys(),
+        key=lambda u: stats.user_stats[u].cost,
+        reverse=True,
+    )
+
+    for user in sorted_users:
+        user_stat = stats.user_stats[user]
+        lines.append(_render_separator(columns))
+        values: list[str] = [
+            f"  └─ {user}",
+            format_number(user_stat.input_tokens),
+            format_number(user_stat.output_tokens),
+            format_number(user_stat.cache_create),
+            format_number(user_stat.cache_read),
+            format_number(user_stat.total_tokens),
+            format_currency(user_stat.cost),
+        ]
+        lines.append(_format_row(values, columns))
+
+    return lines
+
+
 def _render_total_row(
     total: AggregatedStats,
     columns: list[tuple[str, int, bool]],
+    group_by_user: bool = False,
 ) -> str:
     """Render the grand total row."""
-    values: list[str] = [
-        "Total",
-        "",
-        format_number(total.input_tokens),
-        format_number(total.output_tokens),
-        format_number(total.cache_create),
-        format_number(total.cache_read),
-        format_number(total.total_tokens),
-        format_currency(total.cost),
-    ]
+    if group_by_user:
+        values: list[str] = [
+            "Total",
+            format_number(total.input_tokens),
+            format_number(total.output_tokens),
+            format_number(total.cache_create),
+            format_number(total.cache_read),
+            format_number(total.total_tokens),
+            format_currency(total.cost),
+        ]
+    else:
+        values = [
+            "Total",
+            "",
+            format_number(total.input_tokens),
+            format_number(total.output_tokens),
+            format_number(total.cache_create),
+            format_number(total.cache_read),
+            format_number(total.total_tokens),
+            format_currency(total.cost),
+        ]
     return _format_row(values, columns)
 
 

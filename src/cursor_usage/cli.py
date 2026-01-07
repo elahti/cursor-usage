@@ -50,12 +50,25 @@ def analyze(
             help="Show model-specific breakdown per month.",
         ),
     ] = False,
+    group_by_user: Annotated[
+        bool,
+        typer.Option(
+            "--group-by-user",
+            "-g",
+            help="Show per-user breakdown per month (mutually exclusive with -b).",
+        ),
+    ] = False,
 ) -> None:
     """Analyze usage statistics from a Cursor CSV export.
 
     Parses the CSV file and displays aggregated statistics
     grouped by month with totals for token usage and costs.
     """
+    if breakdown and group_by_user:
+        raise typer.BadParameter(
+            "Cannot use both -b/--breakdown and -g/--group-by-user flags together."
+        )
+
     events = parse_csv_file(csv_file)
 
     if not events:
@@ -65,7 +78,9 @@ def analyze(
     monthly_stats = aggregate_by_month(events)
     total = compute_grand_total(monthly_stats)
 
-    table = render_table(monthly_stats, total, show_models=breakdown)
+    table = render_table(
+        monthly_stats, total, show_models=breakdown, group_by_user=group_by_user
+    )
 
     if output_file:
         output_file.write_text(table + "\n", encoding="utf-8")
