@@ -47,13 +47,13 @@ def parse_csv_stream(stream: TextIO) -> Iterator[UsageEvent]:
 
     for row_num, row in enumerate(reader, start=2):
         try:
-            event = _parse_row(row)
+            event = parse_row(row)
             yield event
         except (ValueError, KeyError) as e:
             print(f"Warning: Skipping row {row_num}: {e}", file=sys.stderr)
 
 
-def _parse_row(row: dict[str, str]) -> UsageEvent:
+def parse_row(row: dict[str, str]) -> UsageEvent:
     """Convert a CSV row dict to a UsageEvent.
 
     Args:

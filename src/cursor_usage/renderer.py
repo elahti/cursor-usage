@@ -59,7 +59,7 @@ COLUMNS_GROUP_BY_USER: list[tuple[str, int, bool]] = [
 ]
 
 
-def _get_columns(
+def get_columns(
     show_models: bool, group_by_user: bool = False
 ) -> list[tuple[str, int, bool]]:
     """Get column definitions based on display options."""
@@ -70,7 +70,7 @@ def _get_columns(
     return COLUMNS_NO_BREAKDOWN
 
 
-def _anonymize_email(email: str) -> str:
+def anonymize_email(email: str) -> str:
     """Anonymize an email address using a hash-based approach.
 
     Args:
@@ -103,14 +103,14 @@ def render_table(
     Returns:
         Complete table as a string.
     """
-    columns = _get_columns(show_models, group_by_user)
+    columns = get_columns(show_models, group_by_user)
     lines: list[str] = []
 
-    lines.append(_render_border("top", columns))
-    lines.append(_render_header(columns))
+    lines.append(render_border("top", columns))
+    lines.append(render_header(columns))
 
     for stats in monthly_stats:
-        lines.append(_render_separator(columns))
+        lines.append(render_separator(columns))
         if group_by_user:
             lines.extend(_render_data_row_grouped(stats, columns))
             lines.extend(_render_user_breakdown_rows(stats, columns, anonymize))
@@ -119,14 +119,14 @@ def render_table(
             if show_models:
                 lines.extend(_render_model_breakdown_rows(stats, columns))
 
-    lines.append(_render_separator(columns))
+    lines.append(render_separator(columns))
     lines.append(_render_total_row(total, columns, group_by_user))
-    lines.append(_render_border("bottom", columns))
+    lines.append(render_border("bottom", columns))
 
     return "\n".join(lines)
 
 
-def _render_border(position: str, columns: list[tuple[str, int, bool]]) -> str:
+def render_border(position: str, columns: list[tuple[str, int, bool]]) -> str:
     """Render top or bottom border line."""
     if position == "top":
         left, mid, right = BOX_TL, BOX_TJ, BOX_TR
@@ -137,13 +137,13 @@ def _render_border(position: str, columns: list[tuple[str, int, bool]]) -> str:
     return left + mid.join(segments) + right
 
 
-def _render_separator(columns: list[tuple[str, int, bool]]) -> str:
+def render_separator(columns: list[tuple[str, int, bool]]) -> str:
     """Render horizontal separator between rows."""
     segments = [BOX_H * width for _, width, _ in columns]
     return BOX_LJ + BOX_X.join(segments) + BOX_RJ
 
 
-def _render_header(columns: list[tuple[str, int, bool]]) -> str:
+def render_header(columns: list[tuple[str, int, bool]]) -> str:
     """Render the header row."""
     cells: list[str] = []
     for name, width, is_numeric in columns:
@@ -207,7 +207,7 @@ def _render_model_breakdown_rows(
 
     for model in sorted_models:
         model_stat = stats.model_stats[model]
-        lines.append(_render_separator(columns))
+        lines.append(render_separator(columns))
         values: list[str] = [
             f"  └─ {model}",
             "",
@@ -270,8 +270,8 @@ def _render_user_breakdown_rows(
 
     for user in sorted_users:
         user_stat = stats.user_stats[user]
-        display_name = _anonymize_email(user) if anonymize else user
-        lines.append(_render_separator(columns))
+        display_name = anonymize_email(user) if anonymize else user
+        lines.append(render_separator(columns))
         values: list[str] = [
             f"  └─ {display_name}",
             format_number(user_stat.input_tokens),
