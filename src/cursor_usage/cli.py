@@ -58,6 +58,14 @@ def analyze(
             help="Show per-user breakdown per month (mutually exclusive with -b).",
         ),
     ] = False,
+    anonymize: Annotated[
+        bool,
+        typer.Option(
+            "--anonymize",
+            "-a",
+            help="Anonymize user emails in output (requires -g).",
+        ),
+    ] = False,
 ) -> None:
     """Analyze usage statistics from a Cursor CSV export.
 
@@ -67,6 +75,11 @@ def analyze(
     if breakdown and group_by_user:
         raise typer.BadParameter(
             "Cannot use both -b/--breakdown and -g/--group-by-user flags together."
+        )
+
+    if anonymize and not group_by_user:
+        raise typer.BadParameter(
+            "The -a/--anonymize flag requires -g/--group-by-user flag."
         )
 
     events = parse_csv_file(csv_file)
@@ -79,7 +92,11 @@ def analyze(
     total = compute_grand_total(monthly_stats)
 
     table = render_table(
-        monthly_stats, total, show_models=breakdown, group_by_user=group_by_user
+        monthly_stats,
+        total,
+        show_models=breakdown,
+        group_by_user=group_by_user,
+        anonymize=anonymize,
     )
 
     if output_file:

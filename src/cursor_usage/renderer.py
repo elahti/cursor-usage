@@ -4,6 +4,8 @@ Renders AggregatedStats into formatted tables matching
 the expected output format.
 """
 
+import hashlib
+
 from cursor_usage.formatter import format_currency, format_number
 from cursor_usage.models import AggregatedStats
 
@@ -68,12 +70,26 @@ def _get_columns(
     return COLUMNS_NO_BREAKDOWN
 
 
+def _anonymize_email(email: str) -> str:
+    """Anonymize an email address using a hash-based approach.
+
+    Args:
+        email: The email address to anonymize.
+
+    Returns:
+        An anonymized identifier in the format 'User-{hash}'.
+    """
+    hash_prefix = hashlib.sha256(email.encode()).hexdigest()[:8]
+    return f"User-{hash_prefix}"
+
+
 def render_table(
     monthly_stats: list[AggregatedStats],
     total: AggregatedStats,
     *,
     show_models: bool = False,
     group_by_user: bool = False,
+    anonymize: bool = False,
 ) -> str:
     """Render statistics as an ASCII table.
 
@@ -82,6 +98,7 @@ def render_table(
         total: Grand total aggregation.
         show_models: Whether to include per-model breakdown rows.
         group_by_user: Whether to include per-user breakdown rows.
+        anonymize: Whether to anonymize user emails in output.
 
     Returns:
         Complete table as a string.
@@ -96,7 +113,7 @@ def render_table(
         lines.append(_render_separator(columns))
         if group_by_user:
             lines.extend(_render_data_row_grouped(stats, columns))
-            lines.extend(_render_user_breakdown_rows(stats, columns))
+            lines.extend(_render_user_breakdown_rows(stats, columns, anonymize))
         else:
             lines.extend(_render_data_row(stats, columns))
             if show_models:
@@ -230,10 +247,17 @@ def _render_data_row_grouped(
 def _render_user_breakdown_rows(
     stats: AggregatedStats,
     columns: list[tuple[str, int, bool]],
+    anonymize: bool = False,
 ) -> list[str]:
     """Render per-user breakdown rows with separators.
 
-    Returns list of lines including separators before each user row.
+    Args:
+        stats: Aggregated statistics containing user data.
+        columns: Column definitions for formatting.
+        anonymize: Whether to anonymize user emails in output.
+
+    Returns:
+        List of lines including separators before each user row.
     """
     lines: list[str] = []
 
@@ -246,9 +270,10 @@ def _render_user_breakdown_rows(
 
     for user in sorted_users:
         user_stat = stats.user_stats[user]
+        display_name = _anonymize_email(user) if anonymize else user
         lines.append(_render_separator(columns))
         values: list[str] = [
-            f"  └─ {user}",
+            f"  └─ {display_name}",
             format_number(user_stat.input_tokens),
             format_number(user_stat.output_tokens),
             format_number(user_stat.cache_create),
